@@ -115,6 +115,19 @@ export default async function MonumentPage({ params }: MonumentPageProps) {
         </div>
       </div>
 
+      {/* City Story */}
+      {monument.cityStory && (
+        <details className="max-w-3xl mx-auto mt-16 border border-hairline p-8 rounded-sm bg-white/[0.02] group">
+          <summary className="cursor-pointer text-lg font-medium mb-0 hover:text-ash transition-colors tracking-tight list-none flex items-center justify-between">
+            <span>A City Story</span>
+            <span className="text-ash group-open:rotate-180 transition-transform duration-300">▼</span>
+          </summary>
+          <div className="pt-6 text-base text-ash/90 leading-relaxed whitespace-pre-line">
+            {monument.cityStory}
+          </div>
+        </details>
+      )}
+
       {/* Form Story */}
       {monument.formStory && (
         <details className="max-w-3xl mx-auto mt-16 border border-hairline p-8 rounded-sm bg-white/[0.02] group">
