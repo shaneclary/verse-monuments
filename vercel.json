@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd verse-monuments && npm install && npm run build",
-  "outputDirectory": "verse-monuments/.next",
-  "installCommand": "cd verse-monuments && npm install",
-  "framework": null
-}
