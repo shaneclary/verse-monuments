@@ -76,8 +76,15 @@ export default function ApplyPage() {
       <h1 className="text-4xl md:text-5xl font-unifraktur mb-6 tracking-tight">
         Apply to Monument Circle
       </h1>
-      <p className="text-lg text-ash/90 mb-12 leading-relaxed">
+      <p className="text-lg text-ash/90 mb-4 leading-relaxed">
         Brief form; we look for voice fit and care for craft. All fields required unless marked optional.
+      </p>
+      <p className="text-sm text-ash/70 mb-12 leading-relaxed">
+        Too much paperwork, just want to earn a{" "}
+        <Link href="/partners/quick" className="text-white hover:text-ash transition-colors underline">
+          quick buck
+        </Link>
+        ?
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-8">
