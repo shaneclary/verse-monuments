@@ -36,14 +36,6 @@ export default function VerseHeader() {
               </Link>
             </li>
             <li>
-              <Link
-                href="/#pricing"
-                className="hover:text-ash transition-colors duration-300 relative after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-[1px] after:bg-ash after:transition-all after:duration-300 hover:after:w-full"
-              >
-                Pricing
-              </Link>
-            </li>
-            <li>
               <button
                 onClick={openCart}
                 className="relative hover:text-ash transition-colors duration-300 p-2"
