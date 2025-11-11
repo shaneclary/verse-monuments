@@ -135,11 +135,11 @@ export default function Cart() {
             </div>
 
             <Link
-              href="/#pricing"
+              href="/checkout"
               onClick={closeCart}
               className="block w-full bg-ink text-white text-center px-8 py-4 text-sm font-medium tracking-wide hover:bg-ash transition-colors duration-300"
             >
-              Proceed to acquisition
+              Proceed to checkout
             </Link>
 
             <button
