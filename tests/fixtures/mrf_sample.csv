@@ -1,0 +1,6 @@
+hospital_name,last_updated_on,version
+Sample Spine Hospital,2026-01-15,2.0.0
+description,code|1,code|1|type,setting,standard_charge|gross,standard_charge|discounted_cash,standard_charge|min,standard_charge|max
+Cervical artificial disc replacement single level,22856,CPT,outpatient,62000,31000,24000,48000
+Lumbar artificial disc replacement single level,22857,CPT,inpatient,85000,42000,38000,41000
+Total knee arthroplasty unrelated,27447,CPT,inpatient,40000,20000,18000,22000

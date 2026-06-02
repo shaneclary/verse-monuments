@@ -1,0 +1,123 @@
+# config.yaml — KODEX single source of truth.
+#
+# The operator edits ONLY this file to change geography, CPT codes, endpoints,
+# or scoring weights. No code changes required. (Spec §7.)
+#
+# Anything marked CONFIRM/VERIFY is a placeholder the operator must check
+# against the real engagement before trusting output (Spec §11, §12).
+
+geography:
+  # §12 Q1 — CONFIRM with operator before a real run.
+  state: "CA"
+  center_zip: "93401"          # San Luis Obispo, CA (placeholder — CONFIRM)
+  radius_miles: 100
+
+procedure:
+  # §1 / §11 — CPT codes change annually. These four are the current
+  # ADR set verified as of 2026-06; RE-VERIFY against the live CPT set
+  # at every build. Do not trust this list as permanently final.
+  cpt_codes: ["22856", "22858", "22857", "22860"]
+  cpt_descriptions:
+    "22856": "Total disc arthroplasty, anterior approach, cervical, single interspace"
+    "22858": "Each additional cervical interspace (add-on to 22856)"
+    "22857": "Total disc arthroplasty, anterior approach, lumbar, single interspace"
+    "22860": "Each additional lumbar interspace (add-on to 22857)"
+  # §12 Q2 — "cervical" | "lumbar" | "both". Drives evidence queries.
+  region: "both"
+  procedure_label: "Artificial Disc Replacement (cervical/lumbar)"
+
+# Taxonomy descriptions used to seed the NPPES provider search (§3.1).
+provider_taxonomies:
+  - "Orthopaedic Surgery"
+  - "Orthopaedic Surgery, Adult Reconstructive Orthopaedic Surgery"
+  - "Orthopaedic Surgery, Orthopaedic Surgery of the Spine"
+  - "Neurological Surgery"
+
+endpoints:
+  nppes: "https://npiregistry.cms.hhs.gov/api/?version=2.1"
+  open_payments: "https://openpaymentsdata.cms.gov/api/1/datastore/query"
+  pubmed: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+  # medicare_volume + care_compare are bulk-downloaded to SQLite — see connectors.
+
+open_payments:
+  # Open Payments general-payments distribution (datastore) id. These rotate per
+  # program year — VERIFY the current id at build (Spec §3.3). Leave blank to skip.
+  dataset_id: ""
+  # Spine-implant manufacturers worth flagging as a concentration signal.
+  flag_manufacturers:
+    - "Medtronic"
+    - "NuVasive"
+    - "Globus Medical"
+    - "Stryker"
+    - "Zimmer Biomet"
+    - "Centinel Spine"
+    - "Orthofix"
+
+care_compare:
+  # Facility-level measures (NOT surgeon-level — labeled as such in the report).
+  # PSI-90 = patient-safety composite; READM_30_HOSP_WIDE = hospital-wide
+  # readmission. There is no public spine-specific facility complication measure;
+  # these are the closest legitimate facility signals (Spec §3.5, §11).
+  complication_measure_id: "PSI_90_SAFETY"
+  readmission_measure_id: "READM_30_HOSP_WIDE"
+  reporting_period: "CY2024"
+
+mrf:
+  # CMS requires a discovery file at the website root pointing to the MRF
+  # (Spec §3.4). Naming/compliance varies — verify per hospital.
+  discovery_path: "/cms-hpt.txt"
+  # Stream-parse cap: bytes to download before giving up on a malformed/huge file.
+  max_download_bytes: 3000000000   # 3 GB ceiling; we stream, never buffer whole.
+
+# Optional API keys (raise rate limits). Leave blank to run keyless.
+api_keys:
+  open_payments: ""
+  pubmed: ""
+
+rate_limits:
+  default_rps: 5
+  pubmed_rps: 3            # 10 with an api_key
+
+# Local bulk dataset paths (ingested once into SQLite, then queried offline).
+bulk_data:
+  medicare_csv: "data/bulk/medicare_physician_other.csv"
+  care_compare_complications_csv: "data/bulk/care_compare_complications.csv"
+  care_compare_readmissions_csv: "data/bulk/care_compare_readmissions.csv"
+
+manual_inputs:
+  abms_csv: "data/manual_inputs/abms.csv"
+  fairhealth_csv: "data/manual_inputs/fairhealth.csv"
+  state_board_csv: "data/manual_inputs/state_board.csv"
+  # Optional operator-curated provider->facility (CCN) mapping, since NPPES
+  # does not reliably link a surgeon to the hospital CCN used by MRFs/Care Compare.
+  provider_facility_csv: "data/manual_inputs/provider_facility.csv"
+  # Operator-curated facility roster (CCN, name, MRF/cms-hpt.txt domain).
+  facility_roster_csv: "data/manual_inputs/facility_roster.csv"
+
+scoring:
+  quality_weights:
+    board_certified: 0.25       # bool -> 1.0 / 0.0
+    fellowship_spine: 0.15      # bool
+    medicare_adr_volume: 0.20   # log-scaled, min-max across shortlist
+    facility_complication: 0.20 # inverted (lower complication = higher score)
+    facility_readmission: 0.10  # inverted
+    years_in_practice: 0.10     # capped/normalized
+    open_payments: 0.00         # default OFF — transparency display only (§3.3)
+  disciplinary_penalty: 0.5     # fixed penalty applied AFTER weighted sum
+  min_completeness_to_score: 0.4
+  years_cap: 30                 # do not let a 40-year tenure dominate
+  # §12 Q5 — Open Payments: display-only by default. To let it influence the
+  # score, raise its weight above and set the line below to true.
+  open_payments_in_score: false
+
+report:
+  # §12 Q4 — how many rows in the printed shortlist is useful.
+  shortlist_size: 20
+  title: "KODEX — ADR Cost vs. Quality Decision Matrix"
+  # §12 Q3 — cash-pay assumption drives cash-price-primary cost axis.
+  cash_pay_assumed: true
+
+run:
+  offline: false
+  db_path: "data/kodex.sqlite"
+  out_dir: "out"
