@@ -1,0 +1,46 @@
+{
+  "hospital_name": "Sample Spine Hospital",
+  "last_updated_on": "2026-01-15",
+  "version": "2.0.0",
+  "standard_charge_information": [
+    {
+      "description": "Cervical artificial disc replacement, single level",
+      "code_information": [{"code": "22856", "type": "CPT"}],
+      "standard_charges": [
+        {
+          "setting": "outpatient",
+          "gross_charge": 62000,
+          "discounted_cash": 31000,
+          "minimum": 24000,
+          "maximum": 48000,
+          "payers_information": [
+            {"payer_name": "Aetna", "plan_name": "PPO", "standard_charge_dollar": 28000},
+            {"payer_name": "BCBS", "plan_name": "HMO", "standard_charge_dollar": 30000}
+          ]
+        }
+      ]
+    },
+    {
+      "description": "Lumbar artificial disc replacement, single level",
+      "code_information": [{"code": "22857", "type": "CPT"}],
+      "standard_charges": [
+        {
+          "setting": "inpatient",
+          "gross_charge": 85000,
+          "discounted_cash": 42000,
+          "payers_information": [
+            {"payer_name": "Aetna", "plan_name": "PPO", "standard_charge_dollar": 38000},
+            {"payer_name": "Cigna", "plan_name": "PPO", "standard_charge_dollar": 41000}
+          ]
+        }
+      ]
+    },
+    {
+      "description": "Total knee arthroplasty (unrelated to ADR)",
+      "code_information": [{"code": "27447", "type": "CPT"}],
+      "standard_charges": [
+        {"setting": "inpatient", "gross_charge": 40000, "discounted_cash": 20000}
+      ]
+    }
+  ]
+}
