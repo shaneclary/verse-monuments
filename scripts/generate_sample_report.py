@@ -18,12 +18,15 @@ Run:  PYTHONPATH=. python scripts/generate_sample_report.py
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from kodex.config import Config
 from kodex.db import DB
 from kodex import pipeline
 from kodex.connectors import pubmed
+from kodex.connectors.mrf_cost import parse_mrf_file, serialize_result
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO = ROOT / "examples" / "demo"
@@ -155,15 +158,24 @@ def seed_cache(cfg: Config) -> None:
             cc.append({"ccn": ccn, "measure_id": "READM_30_HOSP_WIDE", "score": readm, "as_of": "CY2024"})
         db.upsert_care_compare(cc)
 
-        # Seed the offline MRF path for facilities that have a cash price:
-        # cms-hpt.txt discovery body + the MRF body itself (cost_source=MRF).
+        # Seed the offline MRF path for facilities that have a cash price, exactly
+        # as a real online run would: cache the cms-hpt.txt discovery body and the
+        # EXTRACTED per-CPT prices (not the body). We run the real parser here so
+        # the demo faithfully exercises the streaming-parse + price-cache path.
         for ccn, name, zp, psi, readm, cash in FACILITIES:
             if cash is None:
                 continue
             domain = f"hospital-{ccn}.example.org"
             mrf_url = f"https://{domain}/standardcharges.json"
             db.cache_put("cms_hpt", domain, f"location: {mrf_url}\n")
-            db.cache_put("mrf_body", mrf_url, _mrf_json(cash))
+            tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+            tmp.write(_mrf_json(cash))
+            tmp.close()
+            try:
+                result = parse_mrf_file(tmp.name, ["22856"])
+            finally:
+                os.unlink(tmp.name)
+            db.cache_put("mrf_prices", mrf_url, serialize_result(result))
 
         # Synthetic PubMed evidence (clearly fake PMIDs) for the evidence section.
         pmids = ["90000001", "90000002"]

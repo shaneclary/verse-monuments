@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import os
 import re
 import tempfile
 from dataclasses import dataclass, field
@@ -28,7 +29,7 @@ from typing import IO, Any, Iterator
 import ijson
 
 from ..db import DB
-from ..errors import FetchError, SchemaError
+from ..errors import CacheMiss, FetchError, SchemaError
 from ..models import Facility
 from .base import HttpClient, cached_text
 
@@ -263,11 +264,10 @@ def fetch_facility_cost(
         result: MrfResult | None = None
         for url in urls:
             try:
-                local = _materialize(db, http, url, offline=offline, max_bytes=max_bytes)
-                result = parse_mrf_file(local, cpts)
+                result = _get_mrf_result(db, http, url, cpts, offline=offline, max_bytes=max_bytes)
                 if result.prices:
                     break
-            except (FetchError, SchemaError):
+            except (FetchError, SchemaError, CacheMiss):
                 continue  # try the next candidate URL
 
         if not result or not result.prices:
@@ -284,30 +284,72 @@ def fetch_facility_cost(
         facility.cost_source = "MRF" if facility.cash_price else "MRF_UNAVAILABLE"
         facility.cost_as_of = result.last_updated
         return facility
-    except (FetchError, SchemaError):
+    except (FetchError, SchemaError, CacheMiss):
         facility.cost_source = "MRF_UNAVAILABLE"
         return facility
 
 
-def _materialize(db: DB, http: HttpClient | None, url: str, *, offline: bool, max_bytes: int) -> str:
-    """Get a local path to the MRF body. In offline mode, reconstruct from cache;
-    online, stream to a temp file (flat memory). Cache stores only the URL we
-    streamed, not the multi-GB body, so offline relies on a cached small MRF or a
-    prior local copy."""
+# Cache source for the EXTRACTED per-CPT prices (small), keyed by MRF URL. We
+# deliberately do NOT cache the multi-GB body — only the handful of numbers we
+# extracted — so a later --offline run reproduces the same costs/frontier
+# without re-downloading or buffering the whole file (Spec §3.4 + §4).
+_PRICES_SOURCE = "mrf_prices"
+
+
+def serialize_result(result: MrfResult) -> str:
+    return json.dumps({
+        "last_updated": result.last_updated,
+        "prices": {
+            cpt: {"cash": p.cash, "negotiated_min": p.negotiated_min,
+                  "negotiated_max": p.negotiated_max}
+            for cpt, p in result.prices.items()
+        },
+    })
+
+
+def deserialize_result(payload: str) -> MrfResult:
+    data = json.loads(payload)
+    result = MrfResult(last_updated=data.get("last_updated"))
+    for cpt, p in (data.get("prices") or {}).items():
+        result.prices[cpt] = CptPrice(
+            cash=p.get("cash"), negotiated_min=p.get("negotiated_min"),
+            negotiated_max=p.get("negotiated_max"),
+        )
+    return result
+
+
+def _get_mrf_result(
+    db: DB, http: HttpClient | None, url: str, cpts: list[str], *, offline: bool, max_bytes: int
+) -> MrfResult:
+    """Return the extracted ADR-CPT prices for one MRF URL.
+
+    Offline: read the cached extracted prices (CacheMiss if a prior online run
+    never stored them). Online: stream the body to a temp file (flat memory),
+    parse out only the ADR-CPT rows, cache those extracted prices, and clean up
+    the temp file."""
+    if offline:
+        cached = db.cache_get(_PRICES_SOURCE, url)
+        if cached is None:
+            raise CacheMiss(
+                f"--offline: extracted MRF prices for {url} not cached. Run once "
+                f"online to populate the cache (Spec §4)."
+            )
+        return deserialize_result(cached)
+
+    if http is None:
+        raise FetchError("MRF fetch requires an HttpClient when online.")
     suffix = ".json" if ".json" in url.lower() else (".csv" if ".csv" in url.lower() else "")
     if url.lower().endswith(".gz"):
         suffix += ".gz"
-    if offline:
-        cached = db.cache_get("mrf_body", url)
-        if cached is None:
-            raise FetchError(f"--offline: MRF body for {url} not cached.")
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        tmp.write(cached.encode("utf-8"))
-        tmp.close()
-        return tmp.name
-    if http is None:
-        raise FetchError("MRF materialize requires HttpClient when online.")
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.close()
-    http.stream_to_file(url, tmp.name, max_bytes=max_bytes)
-    return tmp.name
+    try:
+        http.stream_to_file(url, tmp.name, max_bytes=max_bytes)
+        result = parse_mrf_file(tmp.name, cpts)
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+    db.cache_put(_PRICES_SOURCE, url, serialize_result(result), url=url)
+    return result
