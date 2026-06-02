@@ -39,6 +39,24 @@ endpoints:
   pubmed: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
   # medicare_volume + care_compare are bulk-downloaded to SQLite — see connectors.
 
+catalogs:
+  # `kodex fetch-bulk` resolves the CURRENT public datasets from these machine
+  # catalogs BY TITLE, so CMS's rotating distribution UUIDs don't silently break
+  # the run. The endpoints below are stable; the titles are what to re-verify if
+  # a fetch reports "no dataset matched" (Spec §3.2/§3.5, §11).
+  cms_data_json: "https://data.cms.gov/data.json"
+  provider_data_metastore: "https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items"
+  open_payments_metastore: "https://openpaymentsdata.cms.gov/api/1/metastore/schemas/dataset/items"
+  # Dataset titles (substring match, case-insensitive). VERIFY at build.
+  medicare_title: "Medicare Physician & Other Practitioners - by Provider and Service"
+  care_compare_complications_title: "Complications and Deaths - Hospital"
+  care_compare_readmissions_title: "Unplanned Hospital Visits - Hospital"
+  open_payments_general_title: "General Payment Data"
+  # Data / program years to pull. CMS publishes ~2 years in arrears — CONFIRM the
+  # latest available year before a real fetch (an absent year fails loudly).
+  medicare_year: "2023"
+  open_payments_year: "2023"
+
 open_payments:
   # Open Payments general-payments distribution (datastore) id. These rotate per
   # program year — VERIFY the current id at build (Spec §3.3). Leave blank to skip.

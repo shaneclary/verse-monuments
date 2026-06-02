@@ -44,6 +44,28 @@ def test_parse_json_extracts_only_adr_cpts():
     assert res.prices["22856"].negotiated_max == 48000
 
 
+def test_parse_json_captures_last_updated():
+    res = parse_mrf_json(str(FIX / "mrf_sample.json"), CPTS)
+    assert res.last_updated == "2026-01-15"
+
+
+def test_parse_csv_captures_last_updated():
+    res = parse_mrf_csv(str(FIX / "mrf_sample.csv"), CPTS)
+    assert res.last_updated == "2026-01-15"
+
+
+def test_missing_last_updated_is_none(tmp_path):
+    doc = {"standard_charge_information": [
+        {"code_information": [{"code": "22856", "type": "CPT"}],
+         "standard_charges": [{"discounted_cash": 30000}]}
+    ]}
+    f = tmp_path / "no_date.json"
+    f.write_text(json.dumps(doc))
+    res = parse_mrf_json(str(f), CPTS)
+    assert res.last_updated is None
+    assert res.prices["22856"].cash == 30000
+
+
 def test_parse_json_derives_negotiated_range_from_payers():
     # 22857 has no explicit minimum/maximum -> derived from payer dollars.
     res = parse_mrf_json(str(FIX / "mrf_sample.json"), CPTS)

@@ -76,7 +76,37 @@ small CSVs under `data/manual_inputs/` (templates included, headers only):
 ## Bulk datasets
 
 The large Medicare and Care Compare datasets are **ingested once** into SQLite,
-then queried locally:
+then queried locally.
+
+### Turnkey: `kodex fetch-bulk` (recommended)
+
+One command resolves the **current** public datasets from CMS's machine catalogs,
+downloads the CSVs, ingests them, and resolves the Open Payments dataset id:
+
+```bash
+kodex fetch-bulk                      # all datasets, download + ingest
+kodex fetch-bulk --write-config       # also persist the resolved Open Payments id
+kodex fetch-bulk --only medicare      # one dataset (repeatable); --no-ingest to skip ingest
+```
+
+Resolution is **by dataset title, not by UUID** — CMS rotates distribution
+identifiers every vintage, so KODEX reads each catalog's index
+(`data.cms.gov/data.json`, the Provider Data and Open Payments metastores) and
+picks the live distribution whose title matches the `catalogs:` block in
+`config.yaml`. If a fetch reports *"no dataset matched"*, a dataset was renamed —
+update the title there (no code change). Years are taken from
+`catalogs.medicare_year` / `catalogs.open_payments_year`; an unavailable year
+**fails loudly** rather than silently pulling a different vintage. Each dataset is
+independent — one failure is reported and the rest proceed (exit code is non-zero
+if any failed).
+
+> This environment's egress allowlist blocks the CMS/NIH hosts, so `fetch-bulk`
+> is run by the operator on a networked machine. The resolvers are unit-tested
+> against catalog fixtures so the logic is verified regardless.
+
+### Manual: pre-downloaded CSVs
+
+If you already hold the CSVs, ingest them directly:
 
 ```bash
 kodex ingest-medicare      data/bulk/medicare_physician_other.csv --year CY2024
@@ -118,6 +148,7 @@ kodex/
     open_payments.py       # industry/device-maker signal, display-only (§3.3)
     mrf_cost.py            # hospital MRF: cms-hpt.txt discovery + STREAMING parse (§3.4)
     care_compare.py        # facility-level complication/readmission (§3.5)
+    datasets.py            # bulk-dataset acquisition: resolve-by-title + download (§3.2/§3.5)
     fairhealth_manual.py abms_manual.py state_board_manual.py roster.py   # manual adapters
     pubmed.py              # aggregate procedure evidence — never per-surgeon (§3.9)
   scoring.py               # pure, deterministic, transparent scoring + Pareto (§6)
