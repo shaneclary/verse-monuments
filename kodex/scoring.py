@@ -31,6 +31,7 @@ CORE_SIGNALS = (
     "medicare_adr_volume",
     "facility_complication",
     "facility_readmission",
+    "facility_satisfaction",
     "years_in_practice",
 )
 
@@ -54,6 +55,8 @@ class ScoringContext:
     complication_hi: float
     readmission_lo: float
     readmission_hi: float
+    satisfaction_lo: float
+    satisfaction_hi: float
     open_payments_lo: float
     open_payments_hi: float
     years_cap: int
@@ -66,7 +69,7 @@ class ScoringContext:
 
     @classmethod
     def build(cls, rows: list[MatrixRow], years_cap: int) -> "ScoringContext":
-        vols, comps, readms, pays = [], [], [], []
+        vols, comps, readms, sats, pays = [], [], [], [], []
         for r in rows:
             p, f = r.provider, r.facility
             if p.medicare_adr_volume is not None:
@@ -75,13 +78,16 @@ class ScoringContext:
                 comps.append(f.complication_measure)
             if f.readmission_measure is not None:
                 readms.append(f.readmission_measure)
+            if f.satisfaction_measure is not None:
+                sats.append(f.satisfaction_measure)
             if p.open_payments_total is not None:
                 pays.append(p.open_payments_total)
         vlo, vhi = cls._bounds(vols)
         clo, chi = cls._bounds(comps)
         rlo, rhi = cls._bounds(readms)
+        slo, shi = cls._bounds(sats)
         plo, phi = cls._bounds(pays)
-        return cls(vlo, vhi, clo, chi, rlo, rhi, plo, phi, years_cap)
+        return cls(vlo, vhi, clo, chi, rlo, rhi, slo, shi, plo, phi, years_cap)
 
 
 def subscores(provider: Provider, facility: Facility, ctx: ScoringContext) -> dict[str, float | None]:
@@ -111,6 +117,14 @@ def subscores(provider: Provider, facility: Facility, ctx: ScoringContext) -> di
     else:
         out["facility_readmission"] = 1.0 - normalize_minmax(
             f.readmission_measure, ctx.readmission_lo, ctx.readmission_hi
+        )
+
+    # Satisfaction (HCAHPS star): higher is better -> NOT inverted.
+    if f.satisfaction_measure is None:
+        out["facility_satisfaction"] = None
+    else:
+        out["facility_satisfaction"] = normalize_minmax(
+            f.satisfaction_measure, ctx.satisfaction_lo, ctx.satisfaction_hi
         )
 
     # Years: absolute cap then linear scale; a 40-year tenure cannot dominate.
@@ -150,6 +164,7 @@ def _signal_present(provider: Provider, facility: Facility, signal: str) -> bool
         "medicare_adr_volume": provider.medicare_adr_volume,
         "facility_complication": facility.complication_measure,
         "facility_readmission": facility.readmission_measure,
+        "facility_satisfaction": facility.satisfaction_measure,
         "years_in_practice": provider.years_in_practice_proxy,
     }
     return mapping[signal] is not None

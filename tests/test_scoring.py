@@ -28,6 +28,7 @@ WEIGHTS = {
     "medicare_adr_volume": 0.20,
     "facility_complication": 0.20,
     "facility_readmission": 0.10,
+    "facility_satisfaction": 0.10,
     "years_in_practice": 0.10,
     "open_payments": 0.00,
 }
@@ -74,13 +75,13 @@ def test_full_signals_weighted_sum():
         medicare_adr_volume=100, years_in_practice_proxy=30,
     )
     f_hi = _fac("Chi", complication_measure=1.0, readmission_measure=1.0,
-                cash_price={"22856": 30000}, cost_source="MRF")
+                satisfaction_measure=5.0, cash_price={"22856": 30000}, cost_source="MRF")
     p_lo = _prov(
         "lo", board_certified=False, fellowship_spine=False,
         medicare_adr_volume=0, years_in_practice_proxy=0,
     )
     f_lo = _fac("Clo", complication_measure=5.0, readmission_measure=5.0,
-                cash_price={"22856": 50000}, cost_source="MRF")
+                satisfaction_measure=1.0, cash_price={"22856": 50000}, cost_source="MRF")
     rows = [_row(p_hi, f_hi), _row(p_lo, f_lo)]
     ctx = ScoringContext.build(rows, years_cap=30)
 
@@ -91,7 +92,7 @@ def test_full_signals_weighted_sum():
     )
     assert note is None
     assert score == pytest.approx(1.0)
-    # completeness: 6 core present + MRF cost = 7/7
+    # completeness: 7 core present + MRF cost = 8/8
     assert completeness == pytest.approx(1.0)
 
     # p_lo: every sub-score is 0.0 -> weighted 0.0
@@ -169,7 +170,7 @@ def test_disciplinary_penalty_clamped_to_zero():
 # None when too sparse (Spec §6)
 # --------------------------------------------------------------------------
 def test_none_when_below_completeness_threshold():
-    # Only one core signal present -> completeness = (1 + 0)/7 ≈ 0.143 < 0.4
+    # Only one core signal present -> completeness = (1 + 0)/8 = 0.125 < 0.4
     p = _prov("x", board_certified=True)
     f = _fac("Cx")  # cost_source default MRF_UNAVAILABLE -> cost_presence 0
     ctx = ScoringContext.build([_row(p, f)], years_cap=30)
@@ -202,13 +203,16 @@ def test_completeness_counts_cost_source():
         "x", board_certified=True, fellowship_spine=True, medicare_adr_volume=5,
         years_in_practice_proxy=10,
     )
-    f_mrf = _fac("Cm", complication_measure=2.0, readmission_measure=2.0, cost_source="MRF")
-    f_fair = _fac("Cf", complication_measure=2.0, readmission_measure=2.0, cost_source="FAIRHEALTH")
-    f_none = _fac("Cn", complication_measure=2.0, readmission_measure=2.0, cost_source="MRF_UNAVAILABLE")
-    # 6 core present in all three; cost presence 1.0 / 0.5 / 0.0
-    assert data_completeness(p, f_mrf) == pytest.approx(7 / 7)
-    assert data_completeness(p, f_fair) == pytest.approx(6.5 / 7)
-    assert data_completeness(p, f_none) == pytest.approx(6 / 7)
+    f_mrf = _fac("Cm", complication_measure=2.0, readmission_measure=2.0,
+                 satisfaction_measure=4.0, cost_source="MRF")
+    f_fair = _fac("Cf", complication_measure=2.0, readmission_measure=2.0,
+                  satisfaction_measure=4.0, cost_source="FAIRHEALTH")
+    f_none = _fac("Cn", complication_measure=2.0, readmission_measure=2.0,
+                  satisfaction_measure=4.0, cost_source="MRF_UNAVAILABLE")
+    # 7 core present in all three; cost presence 1.0 / 0.5 / 0.0 (denominator 8)
+    assert data_completeness(p, f_mrf) == pytest.approx(8 / 8)
+    assert data_completeness(p, f_fair) == pytest.approx(7.5 / 8)
+    assert data_completeness(p, f_none) == pytest.approx(7 / 8)
 
 
 # --------------------------------------------------------------------------

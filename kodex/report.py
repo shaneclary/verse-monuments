@@ -27,6 +27,7 @@ _SIGNAL_LABELS = {
     "medicare_adr_volume": "Medicare ADR volume (FFS floor)",
     "facility_complication": "Facility complication (facility-level)",
     "facility_readmission": "Facility readmission (facility-level)",
+    "facility_satisfaction": "Patient satisfaction — HCAHPS (facility-level)",
     "years_in_practice": "Years in practice (proxy)",
     "open_payments": "Open Payments (display)",
     "_disciplinary_penalty": "Disciplinary penalty",
@@ -130,9 +131,8 @@ def _preface(b: ReportBundle) -> str:
     <section class="page">
       <h1>{html.escape(cs.get('title', 'KODEX — ADR Cost vs. Quality Matrix'))}</h1>
       <p class="meta">Generated {html.escape(b.generated_at)} · Procedure:
-         {html.escape(cs.get('procedure_label',''))} · Geography:
-         {html.escape(str(cs.get('state','?')))} / {html.escape(str(cs.get('center_zip','?')))}
-         within {html.escape(str(cs.get('radius_miles','?')))} miles.</p>
+         {html.escape(cs.get('procedure_label',''))} · Scope:
+         {html.escape(str(cs.get('scope', cs.get('state','?'))))}.</p>
       <h2>Read this first</h2>
       <p><strong>What this is.</strong> KODEX is a decision-support aggregator. It pulls
       public provider, cost, and quality-signal data, scores it with transparent and
@@ -145,8 +145,10 @@ def _preface(b: ReportBundle) -> str:
       <span class="unk">UNKNOWN</span>; nothing is interpolated or invented.</p>
       <p><strong>Quality axis.</strong> The "quality proxy" is a weighted blend of obtainable
       signals (board certification, spine fellowship, a Medicare volume <em>floor</em>,
-      facility-level complication/readmission measures, and years in practice). It is a
-      proxy, not an outcome guarantee.</p>
+      facility-level complication/readmission measures, facility-level patient
+      satisfaction (HCAHPS), and years in practice). It is a proxy, not an outcome
+      guarantee — there is no public per-surgeon "success rate," and "satisfaction" here
+      is a whole-hospital survey, not ADR- or surgeon-specific.</p>
       <p><strong>Cost axis.</strong> Cost is the hospital <em>facility</em> cash price for the
       relevant CPT codes. It is <em>not</em> the all-in episode cost — surgeon professional
       fees, anesthesia, the implant device, imaging, and follow-up are extra (see the Cost
@@ -240,6 +242,7 @@ def _provider_cards(b: ReportBundle) -> str:
                 <li>Cost source: {_u(f.cost_source)}</li>
                 <li>Complication measure (<em>facility-level, not surgeon</em>): {_u(f.complication_measure)}</li>
                 <li>Readmission measure (<em>facility-level, not surgeon</em>): {_u(f.readmission_measure)}</li>
+                <li>Patient satisfaction — HCAHPS star (<em>facility-level, not surgeon/ADR</em>): {_u(f.satisfaction_measure)}</li>
               </ul>
               <p><strong>Quality proxy: {_score(r.quality_proxy_score)}</strong>
                  · completeness {_pct(r.data_completeness)}

@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     fb.add_argument("--config", default="config.yaml")
     fb.add_argument(
         "--only", action="append", default=None,
-        choices=["medicare", "cc-complications", "cc-readmissions", "open-payments"],
+        choices=["medicare", "cc-complications", "cc-readmissions", "cc-hcahps", "open-payments"],
         help="limit to one or more datasets (default: all). Repeatable.",
     )
     fb.add_argument("--no-ingest", action="store_true", help="download only; skip SQLite ingest")
@@ -95,7 +95,9 @@ def _fetch_bulk(cfg: Config, args: argparse.Namespace) -> int:
     """Resolve current distributions from CMS catalogs, download the CSVs, ingest
     them, and resolve the Open Payments dataset id. Each dataset is independent:
     a failure on one is reported and the rest proceed (Spec §11 resilience)."""
-    wanted = set(args.only) if args.only else {"medicare", "cc-complications", "cc-readmissions", "open-payments"}
+    wanted = set(args.only) if args.only else {
+        "medicare", "cc-complications", "cc-readmissions", "cc-hcahps", "open-payments"
+    }
     max_bytes = int(cfg.get("mrf", "max_download_bytes", default=3_000_000_000))
     rps = float(cfg.get("rate_limits", "default_rps", default=5))
     failures = 0
@@ -129,6 +131,8 @@ def _fetch_bulk(cfg: Config, args: argparse.Namespace) -> int:
              "care_compare_complications_csv", "complications"),
             ("cc-readmissions", "care_compare_readmissions_title", "Unplanned Hospital Visits - Hospital",
              "care_compare_readmissions_csv", "readmissions"),
+            ("cc-hcahps", "care_compare_hcahps_title", "Patient Survey (HCAHPS) - Hospital",
+             "care_compare_hcahps_csv", "satisfaction"),
         ]
         for name, title_key, title_default, path_key, label in cc_jobs:
             if name not in wanted:

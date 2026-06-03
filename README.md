@@ -30,10 +30,15 @@ sample built from synthetic data.
 
 - **Quality proxy (0–1):** a weighted blend of obtainable signals — board
   certification, spine fellowship, a Medicare volume _floor_, facility-level
-  complication/readmission measures, and years in practice. Missing signals are
-  **excluded and the weights renormalized** (never imputed); too-sparse rows
-  score `UNKNOWN`. A disciplinary flag applies a fixed penalty and is always
-  surfaced.
+  complication/readmission measures, facility-level **patient satisfaction
+  (HCAHPS)**, and years in practice. Missing signals are **excluded and the
+  weights renormalized** (never imputed); too-sparse rows score `UNKNOWN`. A
+  disciplinary flag applies a fixed penalty and is always surfaced.
+- **No fabricated "success" or "satisfaction":** there is no public per-surgeon
+  success rate or satisfaction score, so KODEX never prints one. "Success" maps
+  to the labeled quality proxy above; "satisfaction" maps to HCAHPS, which is a
+  **whole-hospital** survey — not surgeon- or ADR-specific. Both are labeled as
+  such everywhere they appear.
 - **Cost axis:** the hospital **facility cash price** for the ADR CPT codes —
   **not** the all-in episode (surgeon fee, anesthesia, implant, imaging, and
   follow-up are extra). Labeled "facility-only" throughout.
@@ -60,6 +65,18 @@ scoring weights. To change a weight, endpoint, or the geography, edit only this
 file; no code changes. Confirm the items marked `CONFIRM`/`VERIFY` before a real
 run (geography, current CPT set, cash-pay assumption).
 
+### Search scope — local vs. national (`seeding.mode`)
+
+- **`state`** — NPPES taxonomy sweep within `geography.state` (a local search).
+- **`national_medicare_topn`** — for a client willing to **travel anywhere**:
+  rank every ADR provider in the country by the Medicare volume _floor_ and take
+  the top `seeding.top_n` (e.g. 100), then enrich each via NPPES. The candidate
+  list (surgeon + credentials + volume) is produced automatically; **cost (MRF)
+  and facility quality/satisfaction still populate only for facilities you
+  roster** (CCN + `mrf_domain`) — you'd roster the handful you'd seriously fly
+  to, not all 100. Requires the Medicare table to be ingested first
+  (`kodex fetch-bulk`). `geography.state`/radius are ignored in this mode.
+
 ## Manual inputs
 
 Some signals have **no free public API** and are entered by the operator into
@@ -80,13 +97,16 @@ then queried locally.
 
 ### Turnkey: `kodex fetch-bulk` (recommended)
 
-One command resolves the **current** public datasets from CMS's machine catalogs,
-downloads the CSVs, ingests them, and resolves the Open Payments dataset id:
+One command resolves the **current** public datasets from CMS's machine catalogs
+— Medicare (volume floor), Care Compare complications (PSI-90) / readmissions /
+**HCAHPS** (satisfaction) — downloads + ingests them, and resolves the Open
+Payments dataset id:
 
 ```bash
 kodex fetch-bulk                      # all datasets, download + ingest
 kodex fetch-bulk --write-config       # also persist the resolved Open Payments id
 kodex fetch-bulk --only medicare      # one dataset (repeatable); --no-ingest to skip ingest
+# datasets: medicare | cc-complications | cc-readmissions | cc-hcahps | open-payments
 ```
 
 Resolution is **by dataset title, not by UUID** — CMS rotates distribution

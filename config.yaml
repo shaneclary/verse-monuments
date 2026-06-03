@@ -8,9 +8,25 @@
 
 geography:
   # §12 Q1 — CONFIRM with operator before a real run.
-  state: "CA"
-  center_zip: "93401"          # San Luis Obispo, CA (placeholder — CONFIRM)
+  # Used only by the "state" seeding mode below. For a national search (client
+  # willing to travel), state/radius are ignored — see `seeding`.
+  state: "IA"
+  center_zip: "50309"          # Des Moines, IA (client home base — CONFIRM)
   radius_miles: 100
+
+seeding:
+  # How the candidate pool is built:
+  #   "state"                 — NPPES taxonomy sweep within `geography.state`.
+  #   "national_medicare_topn"— top-N ADR providers in the COUNTRY by Medicare
+  #                             volume floor, then NPPES-enriched per NPI. Use this
+  #                             when the client will travel anywhere. Requires the
+  #                             Medicare table to be ingested first (`kodex fetch-bulk`).
+  mode: "national_medicare_topn"
+  top_n: 100
+  # NOTE: national seeding gives you the ranked surgeon list + credentials +
+  # volume automatically. Cost (MRF) and facility quality/satisfaction still
+  # populate only for facilities you ROSTER (CCN + mrf_domain) — you would roster
+  # the handful you'd seriously travel to, not all 100.
 
 procedure:
   # §1 / §11 — CPT codes change annually. These four are the current
@@ -51,6 +67,7 @@ catalogs:
   medicare_title: "Medicare Physician & Other Practitioners - by Provider and Service"
   care_compare_complications_title: "Complications and Deaths - Hospital"
   care_compare_readmissions_title: "Unplanned Hospital Visits - Hospital"
+  care_compare_hcahps_title: "Patient Survey (HCAHPS) - Hospital"
   open_payments_general_title: "General Payment Data"
   # Data / program years to pull. CMS publishes ~2 years in arrears — CONFIRM the
   # latest available year before a real fetch (an absent year fails loudly).
@@ -78,6 +95,10 @@ care_compare:
   # these are the closest legitimate facility signals (Spec §3.5, §11).
   complication_measure_id: "PSI_90_SAFETY"
   readmission_measure_id: "READM_30_HOSP_WIDE"
+  # Patient-satisfaction proxy: HCAHPS summary star rating (1-5, higher better).
+  # FACILITY-level / whole-hospital — NOT surgeon- or ADR-specific (Spec §11).
+  # Blank to disable. VERIFY the measure id in the current HCAHPS dataset.
+  satisfaction_measure_id: "H_STAR_RATING"
   reporting_period: "CY2024"
 
 mrf:
@@ -101,6 +122,7 @@ bulk_data:
   medicare_csv: "data/bulk/medicare_physician_other.csv"
   care_compare_complications_csv: "data/bulk/care_compare_complications.csv"
   care_compare_readmissions_csv: "data/bulk/care_compare_readmissions.csv"
+  care_compare_hcahps_csv: "data/bulk/care_compare_hcahps.csv"
 
 manual_inputs:
   abms_csv: "data/manual_inputs/abms.csv"
@@ -113,13 +135,17 @@ manual_inputs:
   facility_roster_csv: "data/manual_inputs/facility_roster.csv"
 
 scoring:
+  # Weights are renormalized over the signals PRESENT on each row, so these need
+  # not sum to 1 — but they're kept tidy. Tuned for a "success & satisfaction"
+  # emphasis: experience (volume), facility outcomes (complications), and HCAHPS.
   quality_weights:
-    board_certified: 0.25       # bool -> 1.0 / 0.0
-    fellowship_spine: 0.15      # bool
-    medicare_adr_volume: 0.20   # log-scaled, min-max across shortlist
+    board_certified: 0.15       # bool -> 1.0 / 0.0
+    fellowship_spine: 0.10      # bool
+    medicare_adr_volume: 0.25   # log-scaled, min-max across shortlist (experience proxy)
     facility_complication: 0.20 # inverted (lower complication = higher score)
     facility_readmission: 0.10  # inverted
-    years_in_practice: 0.10     # capped/normalized
+    facility_satisfaction: 0.15 # HCAHPS star (higher = better); facility-level
+    years_in_practice: 0.05     # capped/normalized
     open_payments: 0.00         # default OFF — transparency display only (§3.3)
   disciplinary_penalty: 0.5     # fixed penalty applied AFTER weighted sum
   min_completeness_to_score: 0.4
@@ -129,8 +155,9 @@ scoring:
   open_payments_in_score: false
 
 report:
-  # §12 Q4 — how many rows in the printed shortlist is useful.
-  shortlist_size: 20
+  # §12 Q4 — how many rows in the printed shortlist is useful. 100 for a national
+  # top-N search; trim to ~20 for a local one.
+  shortlist_size: 100
   title: "KODEX — ADR Cost vs. Quality Decision Matrix"
   # §12 Q3 — cash-pay assumption drives cash-price-primary cost axis.
   cash_pay_assumed: true
