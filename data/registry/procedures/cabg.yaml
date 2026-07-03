@@ -1,0 +1,37 @@
+id: cabg
+name: "Coronary artery bypass grafting (CABG)"
+lay_terms: ["heart bypass", "bypass surgery", "cabg", "open heart surgery", "coronary bypass"]
+specialty: "Cardiac surgery"
+body_area: "Heart"
+code_sets:
+  cpt: ["33533", "33534", "33535", "33536"]
+provider_taxonomies:
+  - "Surgery, Surgical Critical Care"        # VERIFY taxonomy set for cardiac surgery
+  - "Thoracic Surgery (Cardiothoracic Vascular Surgery)"
+facility_measures: ["MORT_30_CABG", "READM_30_CABG", "H_STAR_RATING"]
+facility_signal_measures:
+  risk_adjusted_facility_outcome: "MORT_30_CABG"
+  facility_readmission: "READM_30_CABG"
+  facility_satisfaction: "H_STAR_RATING"
+# NOTE: risk_adjusted_surgeon_outcome has NO Care Compare source — it comes from a
+# specialty registry (STS / state cards) via a future ProviderSource. Until then
+# the pipeline source leaves it UNKNOWN and the confidence grade reflects that.
+# CABG is the strong case: RISK-ADJUSTED SURGEON-LEVEL outcomes are published by
+# the STS and several state report cards. The confidence grader will grade a
+# ranking that includes this signal as strong.
+signals:
+  - {signal_id: risk_adjusted_surgeon_outcome, weight: 0.35}
+  - {signal_id: risk_adjusted_facility_outcome, weight: 0.20}
+  - {signal_id: surgeon_procedure_volume, weight: 0.15}
+  - {signal_id: center_volume, weight: 0.10}
+  - {signal_id: board_certified, weight: 0.10}
+  - {signal_id: facility_readmission, weight: 0.05}
+  - {signal_id: facility_satisfaction, weight: 0.05}
+comparators: ["Percutaneous coronary intervention (stent)", "Medical management"]
+evidence_terms: ["CABG vs PCI outcomes", "coronary artery bypass mortality"]
+questions_to_ask:
+  - "What is your risk-adjusted mortality, and how does it compare to the regional benchmark?"
+  - "Is bypass or a stent the better option for my anatomy?"
+  - "On- or off-pump, and why for me?"
+caveats:
+  - "Even where surgeon outcomes are public, they are risk-adjusted estimates, not guarantees."

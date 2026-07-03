@@ -55,6 +55,7 @@ class Facility(BaseModel):
 
     complication_measure: float | None = None       # facility-level, NOT surgeon-level
     readmission_measure: float | None = None
+    satisfaction_measure: float | None = None        # HCAHPS star rating (facility-level)
     quality_as_of: str | None = None
 
 

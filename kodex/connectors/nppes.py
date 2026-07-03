@@ -73,6 +73,32 @@ def parse_nppes_results(payload: dict[str, Any], current_year: int) -> list[Prov
     return providers
 
 
+def fetch_provider_by_npi(
+    db: DB,
+    http: HttpClient | None,
+    endpoint: str,
+    npi: str,
+    *,
+    offline: bool = False,
+    current_year: int | None = None,
+) -> Provider | None:
+    """Look up a single NPI's NPPES record (national seeding path, §3.1/§3.2).
+
+    Used when the candidate set is seeded by Medicare volume rather than by a
+    state taxonomy sweep: we already have the NPIs, we just need each one's
+    credentials/name/taxonomy/address. Returns None if NPPES has no match (the
+    caller keeps the NPI with whatever non-NPPES signals it has, rather than
+    dropping it silently)."""
+    current_year = current_year or date.today().year
+    params: dict[str, Any] = {"version": "2.1", "number": npi}
+    body = cached_text(
+        db, http, source="nppes", key=f"number={npi}", url=endpoint, params=params, offline=offline
+    )
+    payload = json.loads(body)
+    parsed = parse_nppes_results(payload, current_year)
+    return parsed[0] if parsed else None
+
+
 def search_providers(
     db: DB,
     http: HttpClient | None,

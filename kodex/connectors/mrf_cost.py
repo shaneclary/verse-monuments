@@ -35,6 +35,11 @@ from .base import HttpClient, cached_text
 
 _URL_RE = re.compile(r'https?://[^\s"\'<>\)]+', re.IGNORECASE)
 _MRF_FILE_RE = re.compile(r"\.(json|csv)(\.gz)?(\?|$)", re.IGNORECASE)
+# CMS template carries `last_updated_on` in the metadata block at the TOP of the
+# file (well before the big array). We grab it from a bounded head read so memory
+# stays flat even on a multi-GB MRF (Spec §3.4).
+_LAST_UPDATED_RE = re.compile(r'"last_updated_on"\s*:\s*"([^"]+)"', re.IGNORECASE)
+_HEAD_BYTES = 65536
 
 
 @dataclass
@@ -129,14 +134,27 @@ def _charges_from_entry(entry: dict[str, Any]) -> tuple[float | None, float | No
     return cash, lo, hi
 
 
+def _extract_last_updated(path: str) -> str | None:
+    """Best-effort: read a bounded head of the MRF and pull `last_updated_on`.
+    Bounded so we never buffer a multi-GB body; returns None if absent in the
+    head (degrades to UNKNOWN in the appendix rather than fabricating a date)."""
+    try:
+        with _open_maybe_gzip(path, "rb") as fh:
+            head = fh.read(_HEAD_BYTES)
+    except OSError:
+        return None
+    if isinstance(head, bytes):
+        head = head.decode("utf-8", errors="ignore")
+    m = _LAST_UPDATED_RE.search(head)
+    return m.group(1) if m else None
+
+
 def parse_mrf_json(path: str, cpts: list[str]) -> MrfResult:
     """Stream the CMS JSON template, extracting only ADR-CPT rows. Memory stays
     flat: we iterate standard_charge_information items one at a time."""
     cpt_set = set(cpts)
-    result = MrfResult()
+    result = MrfResult(last_updated=_extract_last_updated(path))
     with _open_maybe_gzip(path, "rb") as fh:
-        # last_updated_on appears before the big array; grab it cheaply if present.
-        # (Best-effort; the main pass is the streamed item iteration below.)
         try:
             for item in ijson.items(fh, "standard_charge_information.item"):
                 codes = item.get("code_information", []) or []
@@ -179,10 +197,34 @@ def _find_header_row(rows: Iterator[list[str]]) -> tuple[list[str], Iterator[lis
     raise SchemaError("MRF CSV: could not locate a header row (no 'description'/'code|N').")
 
 
+def _extract_last_updated_csv(path: str) -> str | None:
+    """CMS 'tall' CSVs carry `last_updated_on` as a metadata column/value pair in
+    the preamble above the real header. Read a bounded head and pair them up."""
+    import io
+
+    try:
+        with _open_maybe_gzip(path, "r") as fh:
+            head = fh.read(_HEAD_BYTES)
+    except OSError:
+        return None
+    reader = csv.reader(io.StringIO(head))
+    prev: list[str] | None = None
+    for row in reader:
+        lowered = [c.strip().lower() for c in row]
+        if "last_updated_on" in lowered and prev is None:
+            idx = lowered.index("last_updated_on")
+            prev = row  # header row; value is on the NEXT row at the same column
+            header_idx = idx
+            continue
+        if prev is not None:
+            return row[header_idx].strip() if header_idx < len(row) else None
+    return None
+
+
 def parse_mrf_csv(path: str, cpts: list[str]) -> MrfResult:
     """Stream the CMS 'tall' CSV row-by-row, extracting ADR-CPT rows only."""
     cpt_set = set(cpts)
-    result = MrfResult()
+    result = MrfResult(last_updated=_extract_last_updated_csv(path))
     with _open_maybe_gzip(path, "r") as fh:
         reader = csv.reader(fh)
         header, _ = _find_header_row(reader)

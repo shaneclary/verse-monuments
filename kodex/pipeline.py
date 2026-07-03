@@ -140,6 +140,19 @@ def run(config: Config, *, offline: bool | None = None, out_path: str | None = N
 # Steps
 # ---------------------------------------------------------------------------
 def _seed_providers(config: Config, db: DB, http, offline: bool) -> list[Provider]:
+    """Build the candidate pool. Two modes (config.seeding.mode):
+      * "state" (default)            — NPPES taxonomy sweep within a state (§3.1).
+      * "national_medicare_topn"     — the top-N ADR providers in the COUNTRY by
+                                        Medicare volume floor, then NPPES-enriched
+                                        per NPI (§3.2). For "fly anywhere" clients.
+    """
+    mode = config.get("seeding", "mode", default="state")
+    if mode == "national_medicare_topn":
+        return _seed_national(config, db, http, offline)
+    return _seed_by_state(config, db, http, offline)
+
+
+def _seed_by_state(config: Config, db: DB, http, offline: bool) -> list[Provider]:
     by_npi: dict[str, Provider] = {}
     for taxonomy in config.taxonomies:
         try:
@@ -156,6 +169,32 @@ def _seed_providers(config: Config, db: DB, http, offline: bool) -> list[Provide
     return list(by_npi.values())
 
 
+def _seed_national(config: Config, db: DB, http, offline: bool) -> list[Provider]:
+    """Rank every ADR provider in the ingested Medicare table by volume floor and
+    take the top N, then look each one up in NPPES for credentials. An NPI with no
+    NPPES match is KEPT (it still has a volume signal) rather than dropped."""
+    top_n = int(config.get("seeding", "top_n", default=100))
+    ranked = db.top_npis_by_volume(config.cpt_codes, top_n)
+    if not ranked:
+        _warn(
+            "national seeding: the Medicare volume table is empty. Run "
+            "`kodex fetch-bulk` (or `ingest-medicare`) first to populate it."
+        )
+        return []
+    _log(f"national seeding: top {len(ranked)} NPIs by Medicare ADR volume floor")
+    providers: list[Provider] = []
+    for npi, _vol in ranked:
+        p: Provider | None = None
+        try:
+            p = nppes.fetch_provider_by_npi(db, http, config.endpoint("nppes"), npi, offline=offline)
+        except (FetchError, CacheMiss) as exc:
+            _warn(f"NPPES lookup failed for NPI {npi}: {exc}")
+        if p is None:
+            p = Provider(npi=npi, name=f"NPI {npi} (NPPES: no match)")
+        providers.append(p)
+    return providers
+
+
 def _build_facilities(config: Config, db: DB, http, providers, cpts, offline) -> dict[str, Facility]:
     roster_csv = config.manual_input("facility_roster_csv") or ""
     pf_csv = config.manual_input("provider_facility_csv") or ""
@@ -170,6 +209,7 @@ def _build_facilities(config: Config, db: DB, http, providers, cpts, offline) ->
 
     comp_id = config.get("care_compare", "complication_measure_id", default="")
     readm_id = config.get("care_compare", "readmission_measure_id", default="")
+    sat_id = config.get("care_compare", "satisfaction_measure_id", default="")
     cc_as_of = config.get("care_compare", "reporting_period", default=None)
 
     # Enrich each unique facility once (quality local; cost network).
@@ -178,6 +218,7 @@ def _build_facilities(config: Config, db: DB, http, providers, cpts, offline) ->
         fac = facilities.get(ccn) or Facility(ccn=ccn, name=f"Facility {ccn}")
         comp, readm = care_compare.enrich_facility(db, ccn, comp_id, readm_id)
         fac.complication_measure, fac.readmission_measure = comp, readm
+        fac.satisfaction_measure = care_compare.measure_score(db, ccn, sat_id)
         fac.quality_as_of = cc_as_of
         try:
             fetch_facility_cost(
@@ -244,12 +285,19 @@ def _rank_and_trim(rows: list[MatrixRow], shortlist_size: int) -> list[MatrixRow
 
 
 def _build_bundle(config, rows, evidence, benchmarks, offline) -> ReportBundle:
+    mode = config.get("seeding", "mode", default="state")
+    if mode == "national_medicare_topn":
+        top_n = int(config.get("seeding", "top_n", default=100))
+        scope = f"National — top {top_n} ADR providers by Medicare volume floor"
+    else:
+        scope = f"{config.state} / {config.center_zip} within {config.radius_miles:g} miles"
     cs = {
         "title": config.get("report", "title", default="KODEX — ADR Cost vs. Quality Matrix"),
         "procedure_label": config.procedure_label,
         "state": config.state,
         "center_zip": config.center_zip,
         "radius_miles": config.radius_miles,
+        "scope": scope,
         "cpt_descriptions": config.cpt_descriptions,
     }
     source_notes = [
@@ -263,6 +311,8 @@ def _build_bundle(config, rows, evidence, benchmarks, offline) -> ReportBundle:
          "limitation": "Facility component only; not the all-in episode. Schemas/compliance vary; UNKNOWN where unavailable."},
         {"source": "CMS Care Compare", "as_of": config.get("care_compare", "reporting_period", default="CY2024"),
          "limitation": "FACILITY-level measures, NOT surgeon-level."},
+        {"source": "CMS Patient Survey (HCAHPS)", "as_of": config.get("care_compare", "reporting_period", default="CY2024"),
+         "limitation": "Patient-experience 'satisfaction' signal — FACILITY-level (whole-hospital), NOT surgeon- or ADR-specific."},
         {"source": "FAIR Health (manual)", "as_of": "operator-entered",
          "limitation": "Consumer benchmark; used as fallback when an MRF is unavailable."},
         {"source": "ABMS / state board (manual)", "as_of": "operator-entered",

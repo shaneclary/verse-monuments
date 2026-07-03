@@ -134,6 +134,29 @@ class DB:
         )
         return self.conn.execute(q, [npi, *cpts]).fetchall()
 
+    def top_npis_by_volume(
+        self, cpts: list[str], n: int, year: str | None = None
+    ) -> list[tuple[str, float]]:
+        """National candidate seeding (Spec §3.2): the N NPIs with the highest
+        summed ADR service volume across the requested CPTs. This is the Medicare
+        FFS *floor*, not total caseload — the report labels it so. Returns
+        (npi, total_volume) descending."""
+        if not cpts or n <= 0:
+            return []
+        placeholders = ",".join("?" * len(cpts))
+        params: list[Any] = [*cpts]
+        year_clause = ""
+        if year:
+            year_clause = " AND year=?"
+            params.append(year)
+        q = (
+            "SELECT npi, SUM(COALESCE(tot_srvcs,0)) AS vol FROM medicare_volume "
+            f"WHERE cpt IN ({placeholders}){year_clause} "
+            "GROUP BY npi ORDER BY vol DESC, npi ASC LIMIT ?"
+        )
+        params.append(n)
+        return [(r["npi"], r["vol"]) for r in self.conn.execute(q, params).fetchall()]
+
     # ---- bulk: care compare -------------------------------------------
     def upsert_care_compare(self, rows: list[dict[str, Any]]) -> None:
         self.conn.executemany(

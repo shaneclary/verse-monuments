@@ -19,8 +19,15 @@ from ..db import DB
 from ..errors import FetchError
 
 _CCN_COLS = ["Facility ID", "facility_id", "Provider ID", "CCN", "provider_id"]
-_MEASURE_COLS = ["Measure ID", "measure_id", "MeasureID"]
-_SCORE_COLS = ["Score", "score", "Rate", "rate"]
+# "HCAHPS Measure ID" covers the patient-satisfaction (HCAHPS) dataset, whose
+# measure column is named differently from the complications/readmissions ones.
+_MEASURE_COLS = ["Measure ID", "measure_id", "MeasureID", "HCAHPS Measure ID"]
+# For HCAHPS the meaningful value of the summary measure (H_STAR_RATING) lives in
+# "Patient Survey Star Rating"; the others cover complications/readmissions.
+_SCORE_COLS = [
+    "Score", "score", "Rate", "rate",
+    "Patient Survey Star Rating", "HCAHPS Linear Mean Value", "HCAHPS Answer Percent",
+]
 
 
 def _pick(cands: list[str], available: list[str]) -> str | None:
@@ -88,3 +95,12 @@ def enrich_facility(
         comp["score"] if comp else None,
         readm["score"] if readm else None,
     )
+
+
+def measure_score(db: DB, ccn: str, measure_id: str) -> float | None:
+    """Single facility measure (e.g. the HCAHPS satisfaction star rating), or None
+    where the facility has no published score / the measure id is unset."""
+    if not measure_id:
+        return None
+    row = db.care_compare_for(ccn, measure_id)
+    return row["score"] if row else None
