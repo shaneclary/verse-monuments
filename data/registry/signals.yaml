@@ -1,0 +1,114 @@
+# Signals catalog — the machine-readable backbone of KODEX's honesty.
+#
+# Every quality signal a procedure can use is declared here ONCE, with metadata
+# that drives two things automatically:
+#   1. the caveat text shown in results (no more hand-written per-procedure prose)
+#   2. the CONFIDENCE grade of a ranking (a procedure scored on risk-adjusted
+#      surgeon outcomes is graded far higher than one scored on a volume floor).
+#
+# Fields:
+#   granularity     surgeon | facility | regional   (facility != surgeon — enforced)
+#   risk_adjusted   true if the measure adjusts for patient case-mix
+#   direction       higher_better | lower_better | bool
+#   strength        0-1 baseline evidentiary weight of the signal TYPE (used by the
+#                   confidence grader; NOT the per-procedure scoring weight)
+#   coverage_caveat one-line honest limitation, surfaced verbatim in results
+signals:
+  risk_adjusted_surgeon_outcome:
+    label: "Risk-adjusted surgeon outcome (mortality/complication)"
+    granularity: surgeon
+    risk_adjusted: true
+    direction: lower_better
+    source: "Specialty registries / state report cards (e.g. STS, SRTR, NY/PA/CA CABG cards)"
+    coverage_caveat: "The strongest available signal — but published for only a few procedures."
+    strength: 1.0
+
+  risk_adjusted_facility_outcome:
+    label: "Risk-adjusted facility outcome"
+    granularity: facility
+    risk_adjusted: true
+    direction: lower_better
+    source: "CMS / AHRQ risk-adjusted measures"
+    coverage_caveat: "Facility-level, case-mix adjusted; not attributable to an individual surgeon."
+    strength: 0.7
+
+  surgeon_procedure_volume:
+    label: "Surgeon procedure volume (Medicare floor)"
+    granularity: surgeon
+    risk_adjusted: false
+    direction: higher_better
+    source: "Medicare Physician & Other Practitioners"
+    coverage_caveat: "Medicare-FFS only — a FLOOR, not total caseload. Volume correlates with, but is not, outcome."
+    strength: 0.45
+
+  center_volume:
+    label: "Center procedure volume"
+    granularity: facility
+    risk_adjusted: false
+    direction: higher_better
+    source: "Medicare / registries"
+    coverage_caveat: "Facility throughput; a volume-outcome proxy, not an outcome."
+    strength: 0.4
+
+  board_certified:
+    label: "Board certification"
+    granularity: surgeon
+    risk_adjusted: false
+    direction: bool
+    source: "ABMS"
+    coverage_caveat: "A credential, not an outcome."
+    strength: 0.3
+
+  subspecialty_fellowship:
+    label: "Relevant subspecialty fellowship"
+    granularity: surgeon
+    risk_adjusted: false
+    direction: bool
+    source: "Board/registry or NPPES taxonomy"
+    coverage_caveat: "Training signal, not an outcome."
+    strength: 0.3
+
+  facility_complication:
+    label: "Facility complication rate"
+    granularity: facility
+    risk_adjusted: false
+    direction: lower_better
+    source: "CMS Care Compare (e.g. PSI-90)"
+    coverage_caveat: "Whole-hospital, not procedure- or surgeon-specific."
+    strength: 0.35
+
+  facility_readmission:
+    label: "Facility readmission rate"
+    granularity: facility
+    risk_adjusted: false
+    direction: lower_better
+    source: "CMS Care Compare"
+    coverage_caveat: "Whole-hospital, not procedure- or surgeon-specific."
+    strength: 0.3
+
+  facility_satisfaction:
+    label: "Patient satisfaction (HCAHPS)"
+    granularity: facility
+    risk_adjusted: false
+    direction: higher_better
+    source: "CMS Patient Survey (HCAHPS)"
+    coverage_caveat: "Whole-hospital experience survey; not procedure- or surgeon-specific."
+    strength: 0.25
+
+  accreditation:
+    label: "Program accreditation / designation"
+    granularity: facility
+    risk_adjusted: false
+    direction: bool
+    source: "Specialty bodies (e.g. MBSAQIP, Commission on Cancer, NCI, Magnet)"
+    coverage_caveat: "Program met a standard; a floor, not a comparative outcome."
+    strength: 0.4
+
+  years_in_practice:
+    label: "Years in practice (proxy)"
+    granularity: surgeon
+    risk_adjusted: false
+    direction: higher_better
+    source: "NPPES enumeration date"
+    coverage_caveat: "Tenure proxy; capped so it cannot dominate."
+    strength: 0.2

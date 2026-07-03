@@ -16,6 +16,7 @@ cache, or --offline to rebuild from cache).
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 
@@ -27,9 +28,23 @@ from .db import DB
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="kodex", description="ADR cost-vs-quality decision matrix.")
+    parser = argparse.ArgumentParser(prog="kodex", description="Find your best medical match — cost & quality decision support.")
     parser.add_argument("--version", action="version", version=f"KODEX {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    sc = sub.add_parser("search", help="plain-language: find best-match providers for a condition/procedure")
+    sc.add_argument("query", help="what you need, in your words (e.g. 'knee replacement', 'heart bypass')")
+    sc.add_argument("--registry", default="data/registry")
+    sc.add_argument("--near", default=None, help="your ZIP code")
+    sc.add_argument("--travel", action="store_true", help="willing to travel nationally")
+    sc.add_argument("--priority", action="append", default=None, metavar="KEY=VAL",
+                    help="emphasis, e.g. outcomes=1.5 experience=1.2 satisfaction=0.8 (repeatable)")
+    sc.add_argument("--json", action="store_true", help="emit machine-readable JSON (for a UI)")
+
+    cq = sub.add_parser("conditions", help="search the registry of conditions/procedures by lay term")
+    cq.add_argument("query")
+    cq.add_argument("--registry", default="data/registry")
+    cq.add_argument("--json", action="store_true")
 
     rp = sub.add_parser("run", help="run the pipeline and produce the PDF report")
     rp.add_argument("--config", default="config.yaml")
@@ -61,6 +76,11 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--config", default="config.yaml")
 
     args = parser.parse_args(argv)
+
+    # Patient-facing search commands need no config.yaml — they run on the registry.
+    if args.cmd in ("search", "conditions"):
+        return _search_cmd(args)
+
     cfg = Config.load(args.config)
 
     if args.cmd == "run":
@@ -89,6 +109,57 @@ def main(argv: list[str] | None = None) -> int:
 
 def _err(msg: str) -> None:
     print(f"[kodex] {msg}", file=sys.stderr)
+
+
+def _search_cmd(args: argparse.Namespace) -> int:
+    """Patient-facing: `kodex conditions <q>` and `kodex search <q>`. Runs on the
+    registry with the synthetic provider source (real data plugs in later)."""
+    from .matching import PatientContext
+    from .registry import Registry
+    from .search import find_care
+
+    reg = Registry.load(args.registry)
+
+    if args.cmd == "conditions":
+        hits = reg.search(args.query)
+        if args.json:
+            print(json.dumps([h.model_dump() for h in hits], indent=2))
+            return 0
+        if not hits:
+            print("No matching condition or procedure. Try different words.")
+            return 0
+        for h in hits:
+            paths = ", ".join(h.procedure_ids) or "—"
+            print(f"[{h.kind:9}] {h.name}  (match {h.score:.2f} on '{h.matched_on}')  -> {paths}")
+        return 0
+
+    # search
+    priorities: dict[str, float] = {}
+    for kv in (args.priority or []):
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            try:
+                priorities[k.strip()] = float(v)
+            except ValueError:
+                _err(f"ignoring bad --priority {kv!r} (use KEY=NUMBER)")
+    ctx = PatientContext(zip=args.near, willing_to_travel=args.travel, priorities=priorities)
+    resp = find_care(reg, args.query, context=ctx)
+
+    if args.json:
+        print(resp.model_dump_json(indent=2))
+        return 0
+    if resp.note:
+        print(f"[kodex] {resp.note}")
+    if resp.result is None:
+        if resp.hits:
+            print("Did you mean:")
+            for h in resp.hits:
+                print(f"  · {h.name}")
+        else:
+            print("No matching condition or procedure. Try different words.")
+        return 0
+    print(resp.result.to_plain_text())
+    return 0
 
 
 def _fetch_bulk(cfg: Config, args: argparse.Namespace) -> int:

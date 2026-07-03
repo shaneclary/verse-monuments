@@ -1,0 +1,30 @@
+id: total_knee_replacement
+name: "Total knee replacement (arthroplasty)"
+lay_terms: ["knee replacement", "knee arthroplasty", "tkr", "tka", "new knee"]
+specialty: "Orthopedic surgery (adult reconstruction)"
+body_area: "Knee"
+code_sets:
+  cpt: ["27447"]
+provider_taxonomies:
+  - "Orthopaedic Surgery"
+  - "Orthopaedic Surgery, Adult Reconstructive Orthopaedic Surgery"
+# Total joint has a risk-adjusted FACILITY complication measure (THA/TKA) — a
+# stronger footing than ADR, though still facility-level, not surgeon-level.
+facility_measures: ["COMP_HIP_KNEE", "READM_30_HOSP_WIDE", "H_STAR_RATING"]
+signals:
+  - {signal_id: risk_adjusted_facility_outcome, weight: 0.25}
+  - {signal_id: surgeon_procedure_volume, weight: 0.20}
+  - {signal_id: center_volume, weight: 0.10}
+  - {signal_id: board_certified, weight: 0.10}
+  - {signal_id: subspecialty_fellowship, weight: 0.10}
+  - {signal_id: facility_readmission, weight: 0.10}
+  - {signal_id: facility_satisfaction, weight: 0.10}
+  - {signal_id: years_in_practice, weight: 0.05}
+comparators: ["Partial (unicompartmental) knee replacement", "Conservative care", "Osteotomy"]
+evidence_terms: ["total knee arthroplasty outcomes", "TKA revision rate"]
+questions_to_ask:
+  - "How many knee replacements do you do a year, and what is your revision rate?"
+  - "Would a partial knee replacement work for me?"
+  - "What implant do you use and why?"
+caveats:
+  - "The facility complication measure is risk-adjusted but hospital-level — not your surgeon's personal rate."

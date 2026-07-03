@@ -1,0 +1,24 @@
+# Conditions map a patient's PROBLEM (in their words) to the care pathways that
+# treat it. People search by what's wrong ("bad knee", "heart blockage"), not by
+# CPT code — so each condition carries lay terms and links to procedure ids.
+conditions:
+  - id: cervical_disc_herniation
+    name: "Herniated / degenerated cervical disc"
+    lay_terms: ["pinched nerve in neck", "slipped disc neck", "bulging disc neck", "neck disc", "cervical radiculopathy"]
+    description: "Neck disc pressing on nerves, often causing arm pain, numbness, or weakness."
+    pathways: ["adr_spine"]
+    non_surgical_first: true
+
+  - id: knee_osteoarthritis
+    name: "Knee osteoarthritis"
+    lay_terms: ["bad knee", "worn out knee", "bone on bone knee", "knee arthritis"]
+    description: "Cartilage loss in the knee causing pain and stiffness."
+    pathways: ["total_knee_replacement"]
+    non_surgical_first: true
+
+  - id: coronary_artery_disease
+    name: "Coronary artery disease (blocked arteries)"
+    lay_terms: ["clogged arteries", "heart blockage", "blocked heart arteries", "needs bypass"]
+    description: "Narrowed heart arteries that may require bypass or a stent."
+    pathways: ["cabg"]
+    non_surgical_first: false

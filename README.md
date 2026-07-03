@@ -1,18 +1,68 @@
-# KODEX — Spine Surgery (ADR) Cost-vs-Quality Decision Matrix
+# KODEX — Find Your Best Medical Match
 
 > **Note on this repo:** this branch hosts **KODEX**, a standalone offline Python
 > pipeline, at the repository root. The earlier "RIPNYC" web project still lives
 > in the [`verse-monuments/`](./verse-monuments) subdirectory and is unrelated to
 > KODEX.
 
-KODEX is a **decision-support aggregator**, not an outcomes oracle. It pulls
-public provider, cost, and quality-signal data, normalizes it, scores it with
-transparent and configurable weights, and prints an honest two-axis matrix
-(**cost vs. a labeled quality _proxy_**) plus a procedure-evidence summary.
+KODEX is a **decision-support aggregator**, not an outcomes oracle. It helps a
+person weighing a surgery or specialized-care decision find, compare, and ask
+about their options — pulling public provider, cost, and quality signals, scoring
+them transparently, and always saying how much to trust the result.
 
-The deliverable for the (offline, no-internet) end user is a **printed/PDF
-report** — see [`examples/sample_report.pdf`](./examples/sample_report.pdf) for a
-sample built from synthetic data.
+It started as a single-procedure (spine ADR) tool and is generalizing into a
+**condition → best-match search** across procedures. Two layers:
+
+- **Search scaffolding** (procedure-agnostic): a person types a problem in plain
+  words → the registry resolves it to a procedure → candidates are scored and
+  **graded for confidence** → a readable answer comes back. See
+  [Search: any procedure](#search-any-procedure).
+- **Deep ADR pipeline** (the original, fully wired): national provider seeding,
+  hospital MRF cost, Care Compare + HCAHPS, PubMed evidence, and a printable PDF.
+  See [`examples/sample_report.pdf`](./examples/sample_report.pdf).
+
+## Search: any procedure
+
+Everything a procedure needs lives in **`data/registry/`** as data, not code:
+
+```
+data/registry/
+  signals.yaml            signals catalog — granularity / risk-adjustment / caveats
+  procedures/<id>.yaml    one record per procedure (codes, taxonomies, weighted signals)
+  conditions.yaml         patient-language problems -> procedures that treat them
+```
+
+Adding a procedure is a data edit. Try it (uses a **synthetic** provider source —
+real data plugs in behind the same interface later):
+
+```bash
+kodex conditions "heart bypass"        # what did they mean? -> conditions/procedures
+kodex search "slipped disc" --near 50309
+kodex search "knee replacement" --priority outcomes=1.5 --json   # JSON for a UI
+```
+
+**The honest part — confidence grading.** The same scorer serves every procedure,
+and each ranking is graded by the *strength of the data behind it*:
+
+| Procedure | Best available signal | Grade |
+|-----------|----------------------|-------|
+| CABG (heart bypass) | risk-adjusted **surgeon** outcomes (STS / state cards) | **STRONG** |
+| Total knee replacement | risk-adjusted **facility** outcomes | **MODERATE** |
+| ADR (spine) | Medicare volume floor + facility proxies | **LIMITED** |
+
+The tool never dresses a weak ranking up as a strong one. Where no per-surgeon
+outcome data exists, it says so and pivots to a **verified shortlist + the right
+questions to ask**.
+
+Architecture: `registry.py` (records + lay-term search) → a `ProviderSource`
+(`connectors/provider_source.py`, synthetic today) → `matching.py` (generalized
+scoring, Pareto, confidence grading, plain-language rendering) → `search.py` (the
+front door) → `cli.py` (`search` / `conditions`).
+
+## The ADR pipeline (original)
+
+The rest of this README documents the fully-wired spine-ADR pipeline — the deep
+vertical the search scaffolding above generalizes from.
 
 ## What it is — and is NOT
 
