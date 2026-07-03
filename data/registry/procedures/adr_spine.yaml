@@ -9,6 +9,11 @@ provider_taxonomies:
   - "Orthopaedic Surgery, Orthopaedic Surgery of the Spine"
   - "Neurological Surgery"
 facility_measures: ["PSI_90_SAFETY", "READM_30_HOSP_WIDE", "H_STAR_RATING"]
+# Which Care Compare measure feeds each facility signal.
+facility_signal_measures:
+  facility_complication: "PSI_90_SAFETY"
+  facility_readmission: "READM_30_HOSP_WIDE"
+  facility_satisfaction: "H_STAR_RATING"
 # Applicable signals + per-procedure scoring weights (renormalized over those
 # actually present on each candidate). NOTE: no surgeon-outcome signal exists for
 # this procedure — the confidence grader will flag the ranking as limited.

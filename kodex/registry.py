@@ -59,6 +59,10 @@ class Procedure(BaseModel):
     code_sets: dict[str, list[str]] = Field(default_factory=dict)
     provider_taxonomies: list[str] = Field(default_factory=list)
     facility_measures: list[str] = Field(default_factory=list)
+    # Bridge from a generic facility signal id -> the concrete CMS measure id that
+    # feeds it (e.g. facility_complication -> PSI_90_SAFETY). This is what lets one
+    # ProviderSource populate any procedure's facility signals from Care Compare.
+    facility_signal_measures: dict[str, str] = Field(default_factory=dict)
     signals: list[ProcedureSignal] = Field(default_factory=list)
     comparators: list[str] = Field(default_factory=list)
     evidence_terms: list[str] = Field(default_factory=list)

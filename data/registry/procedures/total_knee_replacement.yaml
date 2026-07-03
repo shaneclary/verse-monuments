@@ -11,6 +11,10 @@ provider_taxonomies:
 # Total joint has a risk-adjusted FACILITY complication measure (THA/TKA) — a
 # stronger footing than ADR, though still facility-level, not surgeon-level.
 facility_measures: ["COMP_HIP_KNEE", "READM_30_HOSP_WIDE", "H_STAR_RATING"]
+facility_signal_measures:
+  risk_adjusted_facility_outcome: "COMP_HIP_KNEE"
+  facility_readmission: "READM_30_HOSP_WIDE"
+  facility_satisfaction: "H_STAR_RATING"
 signals:
   - {signal_id: risk_adjusted_facility_outcome, weight: 0.25}
   - {signal_id: surgeon_procedure_volume, weight: 0.20}

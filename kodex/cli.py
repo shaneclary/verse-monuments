@@ -39,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--travel", action="store_true", help="willing to travel nationally")
     sc.add_argument("--priority", action="append", default=None, metavar="KEY=VAL",
                     help="emphasis, e.g. outcomes=1.5 experience=1.2 satisfaction=0.8 (repeatable)")
+    sc.add_argument("--real", action="store_true",
+                    help="use REAL data from the KODEX cache/rosters (needs a populated DB; see fetch-bulk) instead of synthetic")
+    sc.add_argument("--config", default="config.yaml", help="config.yaml for --real (db path, rosters)")
     sc.add_argument("--json", action="store_true", help="emit machine-readable JSON (for a UI)")
 
     cq = sub.add_parser("conditions", help="search the registry of conditions/procedures by lay term")
@@ -143,7 +146,11 @@ def _search_cmd(args: argparse.Namespace) -> int:
             except ValueError:
                 _err(f"ignoring bad --priority {kv!r} (use KEY=NUMBER)")
     ctx = PatientContext(zip=args.near, willing_to_travel=args.travel, priorities=priorities)
-    resp = find_care(reg, args.query, context=ctx)
+    source = None
+    if args.real:
+        from .connectors.pipeline_source import PipelineProviderSource
+        source = PipelineProviderSource(Config.load(args.config), offline=True)
+    resp = find_care(reg, args.query, context=ctx, source=source)
 
     if args.json:
         print(resp.model_dump_json(indent=2))

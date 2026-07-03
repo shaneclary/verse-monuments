@@ -41,6 +41,23 @@ kodex search "slipped disc" --near 50309
 kodex search "knee replacement" --priority outcomes=1.5 --json   # JSON for a UI
 ```
 
+**Real data — same interface.** `--real` swaps the synthetic source for
+`PipelineProviderSource`, which produces candidates from the actual KODEX
+connectors (Medicare volume, NPPES, operator rosters, Care Compare/HCAHPS,
+hospital MRF cost + FAIR Health fallback), reading the SQLite cache offline —
+identical scoring/grading/output, real numbers:
+
+```bash
+kodex fetch-bulk                                   # populate the cache first
+kodex search "slipped disc" --real --config config.yaml
+```
+
+The bridge from a procedure's facility signals to concrete CMS measures is
+`facility_signal_measures` in each procedure record (e.g. `facility_complication:
+PSI_90_SAFETY`) — so any procedure's Care Compare signals populate without code
+changes. Adding a new *kind* of source (e.g. an STS outcomes registry) means
+implementing one method, `ProviderSource.candidates()`.
+
 **The honest part — confidence grading.** The same scorer serves every procedure,
 and each ranking is graded by the *strength of the data behind it*:
 
